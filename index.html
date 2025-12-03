@@ -4,122 +4,146 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>My Private Bin</title>
-<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
-<link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet"/>
-<script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+body { font-family: Arial, sans-serif; margin: 2rem; max-width: 700px; }
+textarea { width: 100%; height: 200px; margin-top: 0.5em; }
+input, button { padding: 0.6em; margin-top: 0.5em; }
+pre { background: #f4f4f4; padding: 1em; border: 1px solid #ddd; white-space: pre-wrap; }
+#result a { word-break: break-all; }
+</style>
 </head>
-<body class="bg-gray-100 min-h-screen flex flex-col items-center p-4">
+<body>
 
-<div class="max-w-3xl w-full">
+<h1>My Private Bin</h1>
 
-  <h1 class="text-3xl font-bold mb-6 text-center">My Private Bin</h1>
+<!-- Create section -->
+<div id="createBox">
+    <label>Title:</label><br>
+    <input id="title"><br><br>
 
-  <div id="createArea" class="bg-white shadow rounded p-6 mb-6">
-    <label class="block mb-2 font-semibold">Title (optional)</label>
-    <input id="title" class="w-full border rounded p-2 mb-4"/>
+    <label>Content:</label><br>
+    <textarea id="content"></textarea><br>
 
-    <label class="block mb-2 font-semibold">Content</label>
-    <textarea id="content" class="w-full border rounded p-2 h-48 mb-4"></textarea>
+    <label>Password (optional):</label><br>
+    <input id="password" type="password"><br>
 
-    <label class="block mb-2 font-semibold">Password (optional)</label>
-    <input id="password" type="password" class="w-full border rounded p-2 mb-4"/>
+    <button id="createBtn">Create Link</button>
 
-    <label class="block mb-2 font-semibold">One-time view?</label>
-    <input id="oneTime" type="checkbox" class="mb-4"/>
-
-    <button id="createBtn" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Create Link</button>
-  </div>
-
-  <div id="result" class="mb-6"></div>
-
-  <div id="viewArea" class="bg-white shadow rounded p-6 hidden">
-    <h2 id="viewTitle" class="text-xl font-bold mb-4"></h2>
-    <pre><code id="viewContent" class="language-none"></code></pre>
-    <p id="note" class="text-red-600 mt-4 font-semibold"></p>
-  </div>
-
+    <div id="result" style="margin-top: 1rem;"></div>
 </div>
 
+<!-- View section -->
+<div id="viewBox" style="display:none;"></div>
+
 <script>
-// ===== Helpers =====
-async function encryptContent(text, password) {
-  const enc = new TextEncoder();
-  const data = enc.encode(text);
-  const key = await crypto.subtle.importKey('raw', enc.encode(password), 'AES-GCM', false, ['encrypt']);
-  const iv = enc.encode('0123456789ABCDEF');
-  const cipher = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, data);
-  return btoa(String.fromCharCode(...new Uint8Array(cipher)));
+// Simple encryption using AES-GCM with proper random IV
+async function encrypt(text, password) {
+    const enc = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey(
+        "raw", enc.encode(password), { name: "PBKDF2" }, false, ["deriveKey"]
+    );
+    
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const key = await crypto.subtle.deriveKey(
+        { name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" },
+        keyMaterial,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["encrypt"]
+    );
+
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encrypted = await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv },
+        key,
+        enc.encode(text)
+    );
+
+    return btoa(JSON.stringify({
+        ct: Array.from(new Uint8Array(encrypted)),
+        iv: Array.from(iv),
+        salt: Array.from(salt)
+    }));
 }
 
-async function decryptContent(ciphertext, password) {
-  const enc = new TextEncoder();
-  const data = Uint8Array.from(atob(ciphertext), c=>c.charCodeAt(0));
-  const key = await crypto.subtle.importKey('raw', enc.encode(password), 'AES-GCM', false, ['decrypt']);
-  const iv = enc.encode('0123456789ABCDEF');
-  const decrypted = await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, data);
-  return new TextDecoder().decode(decrypted);
+async function decrypt(data, password) {
+    const json = JSON.parse(atob(data));
+    const enc = new TextEncoder();
+
+    const keyMaterial = await crypto.subtle.importKey(
+        "raw", enc.encode(password), { name: "PBKDF2" }, false, ["deriveKey"]
+    );
+    
+    const key = await crypto.subtle.deriveKey(
+        { name: "PBKDF2", salt: new Uint8Array(json.salt), iterations: 100000, hash: "SHA-256" },
+        keyMaterial,
+        { name: "AES-GCM", length: 256 },
+        false,
+        ["decrypt"]
+    );
+
+    const decrypted = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: new Uint8Array(json.iv) },
+        key,
+        new Uint8Array(json.ct)
+    );
+
+    return new TextDecoder().decode(decrypted);
 }
 
-// ===== Handle Create =====
-document.getElementById('createBtn').addEventListener('click', async () => {
-  const title = document.getElementById('title').value || '';
-  const content = document.getElementById('content').value;
-  const password = document.getElementById('password').value;
-  const oneTime = document.getElementById('oneTime').checked;
+// Create Link Button
+document.getElementById("createBtn").onclick = async () => {
+    const title = document.getElementById("title").value || "Untitled";
+    const content = document.getElementById("content").value;
+    const password = document.getElementById("password").value;
 
-  if(!content) return alert('Content required!');
+    if (!content) return alert("Please enter content!");
 
-  let encoded;
-  if(password) encoded = await encryptContent(content, password);
-  else encoded = btoa(content);
+    let encoded;
+    let encrypted = 0;
 
-  const url = `${location.origin}${location.pathname}#${encodeURIComponent(encoded)}|${encodeURIComponent(title)}|${password ? 1 : 0}|${oneTime ? 1 : 0}`;
-  document.getElementById('result').innerHTML = `
-    <p class="text-green-700 font-semibold">Link Created:</p>
-    <a href="${url}" target="_blank" class="text-blue-600 underline break-all">${url}</a>
-    <p class="text-gray-500 mt-2">One-time view: ${oneTime ? 'Yes' : 'No'}</p>
-  `;
-});
-
-// ===== Handle Viewing =====
-async function loadFromHash() {
-  if(location.hash){
-    const [encoded, title, isEncrypted, oneTimeFlag] = decodeURIComponent(location.hash.slice(1)).split('|');
-    const storageKey = `viewed_${encoded}`;
-    const alreadyViewed = localStorage.getItem(storageKey);
-
-    if(oneTimeFlag==='1' && alreadyViewed){
-      alert('This one-time link has already been viewed!');
-      return;
+    if (password) {
+        encoded = await encrypt(content, password);
+        encrypted = 1;
+    } else {
+        encoded = btoa(content);
     }
 
-    let content;
-    if(isEncrypted==='1'){
-      const password = prompt('Enter password to view:');
-      try { content = await decryptContent(encoded, password); }
-      catch(e){ content='Invalid password or corrupted data'; }
-    } else content = atob(encoded);
+    const link =
+        `${location.origin}${location.pathname}#${encoded}|${encodeURIComponent(title)}|${encrypted}`;
 
-    // Show content
-    document.getElementById('viewTitle').innerText = title || 'Untitled';
-    const codeElem = document.getElementById('viewContent');
-    codeElem.textContent = content;
-    Prism.highlightElement(codeElem);
+    document.getElementById("result").innerHTML =
+        `<p><strong>Your Link:</strong><br><a href="${link}" target="_blank">${link}</a></p>`;
+};
 
-    document.getElementById('createArea').style.display='none';
-    document.getElementById('result').style.display='none';
-    document.getElementById('viewArea').classList.remove('hidden');
+// Load paste if URL hash exists
+window.onload = async () => {
+    if (location.hash.length > 1) {
+        const hash = location.hash.substring(1);
+        const [encoded, title, encrypted] = hash.split("|");
 
-    // Mark as viewed if one-time
-    if(oneTimeFlag==='1') localStorage.setItem(storageKey,'true');
+        let content;
 
-    if(oneTimeFlag==='1') document.getElementById('note').innerText = 'Note: This was a one-time view paste.';
-  }
-}
+        if (encrypted === "1") {
+            const password = prompt("Enter password to view the content:");
+            try {
+                content = await decrypt(encoded, password);
+            } catch {
+                content = "❌ Wrong password or corrupted content";
+            }
+        } else {
+            content = atob(encoded);
+        }
 
-window.addEventListener('load', loadFromHash);
+        document.getElementById("viewBox").innerHTML =
+            `<h2>${decodeURIComponent(title)}</h2><pre>${content}</pre>`;
+
+        document.getElementById("viewBox").style.display = "block";
+        document.getElementById("createBox").style.display = "none";
+    }
+};
 </script>
 
 </body>
 </html>
-
