@@ -1,149 +1,373 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>My Private Bin</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Private Bin — Secure Client-side</title>
+
+<!-- Prism for syntax highlighting -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
 
 <style>
-body { font-family: Arial, sans-serif; margin: 2rem; max-width: 700px; }
-textarea { width: 100%; height: 200px; margin-top: 0.5em; }
-input, button { padding: 0.6em; margin-top: 0.5em; }
-pre { background: #f4f4f4; padding: 1em; border: 1px solid #ddd; white-space: pre-wrap; }
-#result a { word-break: break-all; }
+:root{
+  --bg:#0f1720; --card:#0b1220; --muted:#9aa4b2; --accent:#5b9cff;
+  --glass: rgba(255,255,255,0.03);
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial;
+  background: linear-gradient(180deg,#081021 0%, #07101a 100%); color:#e6eef8;
+  -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+  padding:28px;
+}
+.container{max-width:980px;margin:0 auto}
+.header{
+  display:flex;align-items:center;gap:14px;margin-bottom:18px;
+}
+.brand{
+  display:flex;flex-direction:column;
+}
+h1{margin:0;font-size:20px}
+.lead{color:var(--muted);font-size:13px;margin-top:4px}
+.grid{display:grid;grid-template-columns:1fr 360px;gap:18px}
+.card{background:var(--card);border-radius:12px;padding:16px;box-shadow:0 6px 18px rgba(2,6,23,0.6);}
+textarea#input{width:100%;min-height:300px;background:var(--glass);border:1px solid rgba(255,255,255,0.03);padding:14px;border-radius:8px;color:inherit;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", monospace;font-size:14px;resize:vertical}
+.controls{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.row{display:flex;gap:8px}
+.input, select{padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:#071326;color:var(--muted);width:100%}
+.small{padding:8px;font-size:13px}
+.btn{background:linear-gradient(180deg,var(--accent),#367bff);color:white;padding:10px 12px;border-radius:9px;border:none;cursor:pointer;font-weight:600}
+.btn.ghost{background:transparent;border:1px solid rgba(255,255,255,0.04)}
+.meta{font-size:13px;color:var(--muted);margin-top:10px}
+.result input{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:#071326;color:var(--muted);font-size:13px}
+.actions{display:flex;gap:8px;margin-top:10px}
+.notice{font-size:13px;color:#b7c3d1;margin-top:8px}
+
+.output pre{white-space:pre-wrap;background:#06111b;padding:12px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", monospace}
+.footer{margin-top:18px;color:var(--muted);font-size:13px;text-align:center}
+.tag{display:inline-block;background:rgba(255,255,255,0.03);padding:6px 8px;border-radius:999px;font-size:12px;color:var(--muted)}
+.small-muted{font-size:12px;color:var(--muted)}
+.optionsRow{display:flex;gap:8px;align-items:center}
+.checkbox{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.copyOK{color:#9fe6a1;font-weight:600}
+@media (max-width:940px){ .grid{grid-template-columns:1fr; } .card{padding:12px} textarea#input{min-height:220px} }
 </style>
 </head>
 <body>
+  <div class="container">
+    <div class="header">
+      <div class="brand">
+        <h1>🔐 Private Bin — Secure Client-Side</h1>
+        <div class="lead">AES-256 GCM (WebCrypto) • PBKDF2 key derivation • expiry & one-time • syntax highlighting</div>
+      </div>
+    </div>
 
-<h1>My Private Bin</h1>
+    <div class="grid">
+      <!-- Main -->
+      <div>
+        <div class="card">
+          <label class="small-muted">Paste / Code</label>
+          <textarea id="input" placeholder="Paste text or code here..."></textarea>
 
-<!-- Create section -->
-<div id="createBox">
-    <label>Title:</label><br>
-    <input id="title"><br><br>
+          <div class="controls">
+            <div class="row">
+              <input id="title" class="input" placeholder="Optional title (visible when opened)"/>
+            </div>
 
-    <label>Content:</label><br>
-    <textarea id="content"></textarea><br>
+            <div class="row">
+              <input id="password" class="input small" placeholder="Enter a strong password (required to encrypt/decrypt)"/>
+            </div>
 
-    <label>Password (optional):</label><br>
-    <input id="password" type="password"><br>
+            <div class="row optionsRow">
+              <div style="flex:1">
+                <select id="expiry" class="input small">
+                  <option value="0">No expiry</option>
+                  <option value="3600">1 hour</option>
+                  <option value="86400">1 day</option>
+                  <option value="604800">7 days</option>
+                  <option value="2592000">30 days</option>
+                  <option value="custom">Custom (minutes)</option>
+                </select>
+              </div>
 
-    <button id="createBtn">Create Link</button>
+              <input id="customExpiry" class="input small" placeholder="minutes" style="width:120px;display:none"/>
 
-    <div id="result" style="margin-top: 1rem;"></div>
-</div>
+              <div class="checkbox">
+                <label><input type="checkbox" id="oneTime"/> One-time view</label>
+              </div>
+            </div>
 
-<!-- View section -->
-<div id="viewBox" style="display:none;"></div>
+            <div class="row">
+              <button id="createBtn" class="btn">🔒 Create Encrypted Link</button>
+              <button id="previewBtn" class="btn ghost" title="Preview decrypted content (requires password)">👁 Preview</button>
+            </div>
+
+            <div class="meta">
+              <span class="tag">AES-GCM</span> <span class="tag">PBKDF2 (100k)</span>
+              <div class="notice">Password is <strong>not</strong> included in the link. Share the password by a separate secure channel.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Decrypted output -->
+        <div class="card output hidden" id="outputCard" style="margin-top:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><strong id="outTitle">Decrypted Paste</strong> <span class="small-muted" id="outMeta"></span></div>
+            <div class="small-muted">Actions:
+              <button class="btn ghost small" id="downloadBtn">Download</button>
+              <button class="btn ghost small" id="clearViewBtn">Close</button>
+            </div>
+          </div>
+          <pre id="pasteContent" class="language-javascript"><code id="pasteCode" class="language-javascript"></code></pre>
+        </div>
+      </div>
+
+      <!-- Side -->
+      <div>
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div><strong>Share</strong><div class="small-muted">Encrypted payload in URL fragment</div></div>
+            <div><span class="tag">Client-side</span></div>
+          </div>
+
+          <div style="margin-top:12px" id="resultArea">
+            <input id="shareLink" placeholder="Your encrypted link will appear here" readonly />
+            <div class="actions" style="margin-top:8px">
+              <button id="copyBtn" class="btn ghost">Copy Link</button>
+              <button id="openBtn" class="btn">Open Link</button>
+            </div>
+            <div class="notice" style="margin-top:10px">Tip: do not post the link and password together. Use two channels.</div>
+            <div style="margin-top:10px">
+              <label class="small-muted">One-time links will clear the fragment after open (best-effort).</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:14px">
+          <strong>How it works</strong>
+          <p class="small-muted">When you click <em>Create</em>, the client derives an AES-256 key from your password using PBKDF2, encrypts the paste with AES-GCM, and places the encrypted JSON blob in the URL fragment. Only someone with the password can decrypt.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">Deploy: push <code>index.html</code> to a repo and enable GitHub Pages • Built with WebCrypto API</div>
+  </div>
 
 <script>
-// Simple encryption using AES-GCM with proper random IV
-async function encrypt(text, password) {
-    const enc = new TextEncoder();
-    const keyMaterial = await crypto.subtle.importKey(
-        "raw", enc.encode(password), { name: "PBKDF2" }, false, ["deriveKey"]
-    );
-    
-    const salt = crypto.getRandomValues(new Uint8Array(16));
-    const key = await crypto.subtle.deriveKey(
-        { name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" },
-        keyMaterial,
-        { name: "AES-GCM", length: 256 },
-        false,
-        ["encrypt"]
-    );
+/* ---------- Crypto helpers (WebCrypto) ---------- */
+const enc = new TextEncoder();
+const dec = new TextDecoder();
 
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const encrypted = await crypto.subtle.encrypt(
-        { name: "AES-GCM", iv },
-        key,
-        enc.encode(text)
-    );
+function toB64(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+function fromB64(s){ return Uint8Array.from(atob(s), c=>c.charCodeAt(0)); }
 
-    return btoa(JSON.stringify({
-        ct: Array.from(new Uint8Array(encrypted)),
-        iv: Array.from(iv),
-        salt: Array.from(salt)
-    }));
+async function deriveKeyFromPassword(password, salt, iterations=100000){
+  // returns CryptoKey for AES-GCM (256)
+  const baseKey = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    {name:'PBKDF2', salt, iterations, hash:'SHA-256'},
+    baseKey,
+    {name:'AES-GCM', length:256},
+    false,
+    ['encrypt','decrypt']
+  );
 }
 
-async function decrypt(data, password) {
-    const json = JSON.parse(atob(data));
-    const enc = new TextEncoder();
-
-    const keyMaterial = await crypto.subtle.importKey(
-        "raw", enc.encode(password), { name: "PBKDF2" }, false, ["deriveKey"]
-    );
-    
-    const key = await crypto.subtle.deriveKey(
-        { name: "PBKDF2", salt: new Uint8Array(json.salt), iterations: 100000, hash: "SHA-256" },
-        keyMaterial,
-        { name: "AES-GCM", length: 256 },
-        false,
-        ["decrypt"]
-    );
-
-    const decrypted = await crypto.subtle.decrypt(
-        { name: "AES-GCM", iv: new Uint8Array(json.iv) },
-        key,
-        new Uint8Array(json.ct)
-    );
-
-    return new TextDecoder().decode(decrypted);
+async function aesEncrypt(plaintext, password, iterations=100000){
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveKeyFromPassword(password, salt, iterations);
+  const ct = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, enc.encode(plaintext));
+  return {
+    v:1,
+    iter: iterations,
+    salt: toB64(salt.buffer),
+    iv: toB64(iv.buffer),
+    ct: toB64(ct)
+  };
 }
 
-// Create Link Button
-document.getElementById("createBtn").onclick = async () => {
-    const title = document.getElementById("title").value || "Untitled";
-    const content = document.getElementById("content").value;
-    const password = document.getElementById("password").value;
+async function aesDecrypt(blob, password){
+  const salt = fromB64(blob.salt);
+  const iv = fromB64(blob.iv);
+  const ct = fromB64(blob.ct);
+  const key = await deriveKeyFromPassword(password, salt, blob.iter);
+  const plain = await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, ct);
+  return dec.decode(plain);
+}
 
-    if (!content) return alert("Please enter content!");
+/* ---------- UI / Actions ---------- */
+const createBtn = document.getElementById('createBtn');
+const previewBtn = document.getElementById('previewBtn');
+const inputEl = document.getElementById('input');
+const pwdEl = document.getElementById('password');
+const titleEl = document.getElementById('title');
+const shareLinkEl = document.getElementById('shareLink');
+const copyBtn = document.getElementById('copyBtn');
+const openBtn = document.getElementById('openBtn');
+const outputCard = document.getElementById('outputCard');
+const pasteContent = document.getElementById('pasteContent');
+const pasteCode = document.getElementById('pasteCode');
+const expirySel = document.getElementById('expiry');
+const customExpiry = document.getElementById('customExpiry');
+const oneTimeEl = document.getElementById('oneTime');
+const downloadBtn = document.getElementById('downloadBtn');
+const clearViewBtn = document.getElementById('clearViewBtn');
 
-    let encoded;
-    let encrypted = 0;
+expirySel.addEventListener('change', ()=> {
+  if(expirySel.value==='custom') customExpiry.style.display='block';
+  else customExpiry.style.display='none';
+});
 
-    if (password) {
-        encoded = await encrypt(content, password);
-        encrypted = 1;
-    } else {
-        encoded = btoa(content);
+// Create encrypted link
+createBtn.addEventListener('click', async () => {
+  const text = inputEl.value;
+  const pwd = pwdEl.value;
+  const title = titleEl.value || '';
+  const oneTime = oneTimeEl.checked;
+
+  if(!text) return alert('Please paste some text or code.');
+  if(!pwd) return alert('Password is required for this secure mode.');
+
+  // expiry
+  let exp = 0;
+  if(expirySel.value==='custom'){
+    const mins = parseInt(customExpiry.value || '0',10);
+    if(mins>0) exp = Date.now() + mins*60*1000;
+  } else {
+    const secs = parseInt(expirySel.value,10);
+    if(secs>0) exp = Date.now() + secs*1000;
+  }
+
+  // package metadata and encrypt JSON of {title, content}
+  const payload = JSON.stringify({title, content: text, oneTime: oneTime?1:0, exp});
+
+  try {
+    const blob = await aesEncrypt(payload, pwd, 100000);
+    // embed blob into fragment as base64 JSON string
+    const frag = btoa(JSON.stringify(blob));
+    const url = `${location.origin}${location.pathname}#${frag}`;
+
+    shareLinkEl.value = url;
+    document.getElementById('resultArea').scrollIntoView({behavior:'smooth'});
+    alert('Encrypted link generated. Remember to send the password separately.');
+  } catch(err){
+    console.error(err);
+    alert('Encryption failed: '+err.message);
+  }
+});
+
+// Copy link
+copyBtn.addEventListener('click', ()=> {
+  if(!shareLinkEl.value) return alert('No link to copy');
+  shareLinkEl.select();
+  navigator.clipboard.writeText(shareLinkEl.value).then(()=> {
+    copyBtn.textContent = 'Copied ✓';
+    setTimeout(()=> copyBtn.textContent = 'Copy Link',1200);
+  }).catch(()=> {
+    document.execCommand('copy');
+    alert('Copied (fallback).');
+  });
+});
+
+// Open link (simulate navigating to link)
+openBtn.addEventListener('click', ()=> {
+  if(!shareLinkEl.value) return alert('No link to open');
+  window.open(shareLinkEl.value, '_blank');
+});
+
+// Preview (decrypt locally without navigating)
+previewBtn.addEventListener('click', async () => {
+  const frag = shareLinkEl.value ? shareLinkEl.value.split('#')[1] : (location.hash.length>1 ? location.hash.substring(1) : '');
+  if(!frag) return alert('No encrypted fragment to preview. Create or open a link first.');
+  const pwd = pwdEl.value || prompt('Enter password to preview:');
+  if(!pwd) return alert('Password required.');
+
+  try {
+    const blob = JSON.parse(atob(frag));
+    const plain = await aesDecrypt(blob, pwd);
+    const obj = JSON.parse(plain);
+    showDecrypted(obj.title, obj.content);
+  } catch(err){
+    console.error(err);
+    alert('Decrypt failed: wrong password or corrupt payload.');
+  }
+});
+
+// Show decrypted content in output card
+function showDecrypted(title, content){
+  outputCard.classList.remove('hidden');
+  document.getElementById('outTitle').textContent = title || 'Decrypted Paste';
+  pasteContent.textContent = content;
+  // try to highlight; assume code/* class selection (Prism)
+  pasteCode.textContent = content;
+  Prism.highlightElement(pasteCode);
+  // scroll into view
+  outputCard.scrollIntoView({behavior:'smooth'});
+}
+
+// Handle download
+downloadBtn.addEventListener('click', ()=> {
+  const txt = pasteContent.textContent || '';
+  const filename = (titleEl.value||'paste') + '.txt';
+  const blob = new Blob([txt], {type:'text/plain'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+});
+
+// Clear decrypted view
+clearViewBtn.addEventListener('click', ()=> {
+  outputCard.classList.add('hidden');
+  pasteContent.textContent = '';
+});
+
+// When page loads with fragment — attempt to decrypt
+async function handleIncomingHash(){
+  if(window.location.hash.length <= 1) return;
+  const frag = window.location.hash.substring(1);
+  let blob;
+  try { blob = JSON.parse(atob(frag)); } catch(e){ console.warn('Invalid fragment'); return; }
+
+  // check expiry (we must parse inner JSON after decrypt -> so need password)
+  const pwd = prompt('Password required to open this paste:');
+  if(!pwd) return alert('Password not provided.');
+
+  try {
+    const plain = await aesDecrypt(blob, pwd);
+    const obj = JSON.parse(plain);
+
+    if(obj.exp && Date.now() > obj.exp){
+      alert('This paste has expired.');
+      // Optionally clear fragment to avoid others seeing
+      history.replaceState(null, '', location.pathname);
+      return;
     }
 
-    const link =
-        `${location.origin}${location.pathname}#${encoded}|${encodeURIComponent(title)}|${encrypted}`;
-
-    document.getElementById("result").innerHTML =
-        `<p><strong>Your Link:</strong><br><a href="${link}" target="_blank">${link}</a></p>`;
-};
-
-// Load paste if URL hash exists
-window.onload = async () => {
-    if (location.hash.length > 1) {
-        const hash = location.hash.substring(1);
-        const [encoded, title, encrypted] = hash.split("|");
-
-        let content;
-
-        if (encrypted === "1") {
-            const password = prompt("Enter password to view the content:");
-            try {
-                content = await decrypt(encoded, password);
-            } catch {
-                content = "❌ Wrong password or corrupted content";
-            }
-        } else {
-            content = atob(encoded);
-        }
-
-        document.getElementById("viewBox").innerHTML =
-            `<h2>${decodeURIComponent(title)}</h2><pre>${content}</pre>`;
-
-        document.getElementById("viewBox").style.display = "block";
-        document.getElementById("createBox").style.display = "none";
+    // one-time: try to clear fragment after opening
+    if(obj.oneTime){
+      // show and then clear fragment from URL (best effort)
+      showDecrypted(obj.title, obj.content);
+      setTimeout(()=> {
+        history.replaceState(null, '', location.pathname);
+      }, 200);
+      return;
     }
-};
+
+    showDecrypted(obj.title, obj.content);
+
+  } catch(err){
+    console.error(err);
+    alert('Unable to decrypt. Wrong password or corrupt payload.');
+  }
+}
+
+// on load
+window.addEventListener('load', handleIncomingHash);
 </script>
-
 </body>
 </html>
