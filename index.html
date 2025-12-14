@@ -6,7 +6,7 @@
 <title>Private Bin — Secure Client-side</title>
 
 <!-- Prism for syntax highlighting -->
-<link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet"/>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorro w.min.css" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
 
@@ -329,35 +329,52 @@ clearViewBtn.addEventListener('click', ()=> {
 // When page loads with fragment — attempt to decrypt
 async function handleIncomingHash(){
   if(window.location.hash.length <= 1) return;
+
   const frag = window.location.hash.substring(1);
   let blob;
-  try { blob = JSON.parse(atob(frag)); } catch(e){ console.warn('Invalid fragment'); return; }
 
-  // check expiry (we must parse inner JSON after decrypt -> so need password)
+  // Step 1: immediately remove fragment BEFORE doing anything else
+  history.replaceState(null, '', location.pathname);
+
+  try {
+    blob = JSON.parse(atob(frag));
+  } catch(e){
+    console.warn('Invalid fragment');
+    return;
+  }
+
   const pwd = prompt('Password required to open this paste:');
-  if(!pwd) return alert('Password not provided.');
+  if(!pwd) {
+    alert('Password not provided.');
+    return;
+  }
 
   try {
     const plain = await aesDecrypt(blob, pwd);
     const obj = JSON.parse(plain);
 
+    // Step 2: Check expiry before showing content
     if(obj.exp && Date.now() > obj.exp){
       alert('This paste has expired.');
-      // Optionally clear fragment to avoid others seeing
-      history.replaceState(null, '', location.pathname);
       return;
     }
 
-    // one-time: try to clear fragment after opening
+    // Step 3: One-time logic — destroy paste immediately
     if(obj.oneTime){
-      // show and then clear fragment from URL (best effort)
+      alert("This is a ONE-TIME view paste. After closing, you cannot view it again.");
       showDecrypted(obj.title, obj.content);
-      setTimeout(()=> {
-        history.replaceState(null, '', location.pathname);
-      }, 200);
+
+      // Step 4: Remove ALL references (memory safety)
+      setTimeout(() => {
+        outputCard.classList.add('hidden');
+        pasteContent.textContent = '';
+        pasteCode.textContent = '';
+      }, 100);
+
       return;
     }
 
+    // Normal paste:
     showDecrypted(obj.title, obj.content);
 
   } catch(err){
